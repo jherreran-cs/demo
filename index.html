@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Del Excel al ERP</title>
+  <meta name="description" content="Convierte pagos desde Excel o CSV a archivos TXT de ancho fijo para el ERP.">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --ink: #19322d;
+      --muted: #687a75;
+      --paper: #fbfaf5;
+      --surface: #ffffff;
+      --line: #dce3df;
+      --green: #14634f;
+      --green-dark: #0d493a;
+      --green-soft: #e8f3ee;
+      --gold: #d7a93b;
+      --red: #b42318;
+      --red-soft: #fff0ed;
+      --shadow: 0 18px 50px rgba(24, 50, 45, .09);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(215, 169, 59, .14), transparent 26rem),
+        linear-gradient(180deg, #f4f7f3 0, var(--paper) 34rem);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 70px; }
+    header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 28px; }
+    .eyebrow { margin: 0 0 8px; color: var(--green); font-weight: 800; font-size: .76rem; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { margin: 0; max-width: 700px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.55rem, 6vw, 5rem); line-height: .94; letter-spacing: -.045em; font-weight: 500; }
+    .lead { max-width: 660px; margin: 18px 0 0; color: var(--muted); font-size: 1.02rem; line-height: 1.6; }
+    .format-pill { flex: 0 0 auto; border: 1px solid var(--line); background: rgba(255,255,255,.68); border-radius: 999px; padding: 11px 15px; color: var(--muted); font-size: .84rem; white-space: nowrap; }
+
+    .notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; margin: 0 0 22px; border: 1px solid #ead9a9; background: #fff9e9; border-radius: 14px; color: #655019; font-size: .9rem; line-height: 1.45; }
+    .notice strong { color: #4c3b0c; }
+    .notice-icon { font-weight: 900; color: #8c6b13; }
+
+    .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr); gap: 20px; align-items: start; }
+    .card { background: rgba(255,255,255,.94); border: 1px solid rgba(220,227,223,.95); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 24px 16px; }
+    .step { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 9px; border-radius: 50%; background: var(--ink); color: white; font-size: .79rem; font-weight: 800; }
+    h2 { display: flex; align-items: center; margin: 0; font-size: 1rem; letter-spacing: -.01em; }
+    .status { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+
+    .upload-wrap { padding: 0 24px 24px; }
+    .dropzone { position: relative; display: grid; place-items: center; min-height: 245px; border: 1.5px dashed #9db4ac; border-radius: 18px; background: linear-gradient(145deg, #f8fbf9, #eef5f1); text-align: center; padding: 28px; transition: .18s ease; }
+    .dropzone.dragging { transform: translateY(-2px); border-color: var(--green); background: var(--green-soft); box-shadow: 0 14px 28px rgba(20,99,79,.12); }
+    .drop-icon { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 15px; border-radius: 17px; background: var(--surface); color: var(--green); box-shadow: 0 7px 20px rgba(20,99,79,.13); font-size: 1.55rem; }
+    .dropzone h3 { margin: 0 0 7px; font-size: 1.08rem; }
+    .dropzone p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .upload-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .btn { border: 0; border-radius: 11px; padding: 11px 16px; font-weight: 750; font-size: .86rem; transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease; }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:focus-visible { outline: 3px solid rgba(20,99,79,.25); outline-offset: 2px; }
+    .btn-primary { color: white; background: var(--green); box-shadow: 0 8px 20px rgba(20,99,79,.2); }
+    .btn-primary:hover:not(:disabled) { background: var(--green-dark); }
+    .btn-secondary { color: var(--ink); background: white; border: 1px solid var(--line); }
+    .btn-ghost { padding: 7px 10px; color: var(--green); background: transparent; border: 1px solid #b9cec6; }
+    .btn-download { padding: 8px 11px; font-size: .78rem; color: var(--green); background: var(--green-soft); }
+    .btn:disabled { cursor: not-allowed; opacity: .42; }
+    #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+    .bank-card { position: sticky; top: 18px; }
+    .bank-body { padding: 0 24px 24px; }
+    .bank-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 34px; gap: 8px; margin-bottom: 8px; }
+    .field { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; color: var(--ink); background: #fcfdfc; font-size: .84rem; }
+    .field:focus { outline: 2px solid rgba(20,99,79,.2); border-color: var(--green); }
+    .remove-bank { border: 0; border-radius: 9px; background: #f5f6f4; color: #7b8a86; font-size: 1rem; }
+    .remove-bank:hover { color: var(--red); background: var(--red-soft); }
+    .bank-note { margin: 12px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+
+    .results { display: none; margin-top: 20px; }
+    .results.visible { display: block; }
+    .validation { margin-bottom: 20px; padding: 0; }
+    .validation.ok { border-color: #b8d6ca; }
+    .validation.error { border-color: #efbbb4; }
+    .validation-inner { display: flex; gap: 14px; padding: 18px 20px; align-items: flex-start; }
+    .validation-mark { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-weight: 900; }
+    .ok .validation-mark { background: var(--green-soft); color: var(--green); }
+    .error .validation-mark { background: var(--red-soft); color: var(--red); }
+    .validation h3 { margin: 1px 0 5px; font-size: .96rem; }
+    .validation p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+    .error-list { margin: 11px 0 0; padding-left: 18px; max-height: 170px; overflow: auto; color: var(--red); font-size: .82rem; line-height: 1.65; }
+
+    .preview-head { align-items: flex-start; }
+    .preview-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .preview-body { padding: 0 24px 24px; }
+    .preview-scroll { overflow-x: auto; border: 1px solid #273c37; border-radius: 14px; background: #12241f; }
+    .ruler, .record { display: block; width: max-content; min-width: 100%; white-space: pre; font-family: "Courier New", Consolas, monospace; font-size: 13px; line-height: 1.75; letter-spacing: 0; font-variant-ligatures: none; }
+    .ruler { position: sticky; top: 0; padding: 13px 16px 9px; color: #8faaa1; border-bottom: 1px solid #314841; background: #182d27; user-select: none; }
+    .records { padding: 10px 16px 14px; counter-reset: row; }
+    .record { color: #eaf4ef; }
+    .record::before { counter-increment: row; content: counter(row) "  "; color: #d7a93b; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 13px; color: var(--muted); font-size: .74rem; }
+    .legend span::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--gold); }
+
+    .files { margin-top: 20px; }
+    .files-list { padding: 0 24px 24px; }
+    .file-row { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid #edf0ee; }
+    .file-row:last-child { border-bottom: 0; }
+    .file-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #f4f6f4; color: var(--green); font-size: .7rem; font-weight: 900; }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; font-weight: 700; }
+    .file-meta { margin-top: 2px; color: var(--muted); font-size: .73rem; }
+
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 10; max-width: min(380px, calc(100% - 48px)); padding: 13px 16px; border-radius: 12px; color: white; background: #19322d; box-shadow: 0 14px 40px rgba(0,0,0,.2); font-size: .86rem; opacity: 0; transform: translateY(12px); pointer-events: none; transition: .22s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 820px) {
+      header { display: block; }
+      .format-pill { display: inline-block; margin-top: 20px; }
+      .grid { grid-template-columns: 1fr; }
+      .bank-card { position: static; }
+      .preview-head { display: block; }
+      .preview-actions { margin-top: 14px; justify-content: flex-start; }
+    }
+
+    @media (max-width: 520px) {
+      .shell { width: min(100% - 20px, 1180px); padding-top: 22px; }
+      .card-head, .upload-wrap, .bank-body, .preview-body, .files-list { padding-left: 16px; padding-right: 16px; }
+      .dropzone { min-height: 220px; padding: 20px 14px; }
+      .bank-row { grid-template-columns: minmax(0, 1fr) 70px 34px; }
+      .file-row { grid-template-columns: 34px minmax(0,1fr); }
+      .file-row .btn { grid-column: 2; justify-self: start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">Preparación de pagos</p>
+        <h1>Del Excel<br>al ERP</h1>
+        <p class="lead">Convierte una hoja de pagos en archivos TXT de ancho fijo, listos para revisar y cargar.</p>
+      </div>
+      <div class="format-pill">7 campos · 122 posiciones · 1 TXT por pago</div>
+    </header>
+
+    <div class="notice" role="note">
+      <span class="notice-icon">!</span>
+      <div><strong>Catálogo de demostración.</strong> Los códigos bancarios incluidos son ejemplos. Reemplázalos por el catálogo real de tu ERP antes de procesar pagos.</div>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <div class="card-head">
+          <h2><span class="step">1</span>Cargar datos</h2>
+          <span class="status" id="fileStatus">Sin archivo</span>
+        </div>
+        <div class="upload-wrap">
+          <div class="dropzone" id="dropzone">
+            <div>
+              <div class="drop-icon" aria-hidden="true">↥</div>
+              <h3>Arrastra aquí tu Excel o CSV</h3>
+              <p>La primera fila debe contener los nombres de las 7 columnas.</p>
+              <div class="upload-actions">
+                <button class="btn btn-primary" id="selectFile" type="button">Seleccionar archivo</button>
+                <button class="btn btn-secondary" id="loadExample" type="button">Cargar ejemplo</button>
+              </div>
+            </div>
+            <input id="fileInput" type="file" accept=".xlsx,.xls,.csv,text/csv" aria-label="Seleccionar archivo Excel o CSV">
+          </div>
+        </div>
+      </article>
+
+      <aside class="card bank-card">
+        <div class="card-head">
+          <h2><span class="step">2</span>Equivalencias</h2>
+          <button class="btn btn-ghost" id="addBank" type="button">+ Banco</button>
+        </div>
+        <div class="bank-body">
+          <div id="bankRows"></div>
+          <p class="bank-note">El nombre se compara sin distinguir mayúsculas ni tildes. Cada código debe tener exactamente 4 caracteres.</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="results" id="results">
+      <article class="card validation" id="validationCard" aria-live="polite">
+        <div class="validation-inner">
+          <div class="validation-mark" id="validationMark">✓</div>
+          <div>
+            <h3 id="validationTitle">Datos listos</h3>
+            <p id="validationText"></p>
+            <ul class="error-list" id="errorList"></ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head preview-head">
+          <div>
+            <h2><span class="step">3</span>Vista previa</h2>
+            <span class="status">Primeras 3 líneas · 122 caracteres por línea</span>
+          </div>
+          <div class="preview-actions">
+            <button class="btn btn-secondary" id="copyPreview" type="button">Copiar vista previa</button>
+            <button class="btn btn-primary" id="downloadAll" type="button">Descargar todos (.zip)</button>
+          </div>
+        </div>
+        <div class="preview-body">
+          <div class="preview-scroll" aria-label="Vista previa de registros de ancho fijo">
+            <div class="ruler" id="ruler"></div>
+            <div class="records" id="previewRecords"></div>
+          </div>
+          <div class="legend">
+            <span>1–13 identificación</span><span>14–53 beneficiario</span><span>54–57 banco</span><span>58–60 cuenta</span><span>61–80 número</span><span>81–92 valor</span><span>93–122 referencia</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card files">
+        <div class="card-head">
+          <h2><span class="step">4</span>Archivos generados</h2>
+          <span class="status" id="filesCount"></span>
+        </div>
+        <div class="files-list" id="filesList"></div>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const REQUIRED = ['cedula_ruc', 'beneficiario', 'banco', 'tipo_cuenta', 'numero_cuenta', 'valor', 'referencia'];
+      const defaultBanks = [
+        ['Pichincha', '0010'], ['Guayaquil', '0017'], ['Produbanco', '0036'],
+        ['Pacífico', '0024'], ['Internacional', '0033'], ['Bolivariano', '0034']
+      ];
+      const exampleRows = [
+        { cedula_ruc: '1790000000001', beneficiario: 'Hormigones Andinos Demo', banco: 'Pichincha', tipo_cuenta: 'Ahorros', numero_cuenta: '4567890123', valor: '1234,50', referencia: 'PLANILLA DEMO 001' },
+        { cedula_ruc: '1790000000002', beneficiario: 'Acabados del Valle Ficticio', banco: 'Guayaquil', tipo_cuenta: 'Corriente', numero_cuenta: '9876543210', valor: '845.75', referencia: 'MUESTRA OBRA NORTE' },
+        { cedula_ruc: '1790000000003', beneficiario: 'Maquinaria Río Verde Prueba', banco: 'Produbanco', tipo_cuenta: 'Ahorros', numero_cuenta: '2200456789', valor: '2.410,00', referencia: 'ALQUILER FICTICIO' },
+        { cedula_ruc: '1790000000004', beneficiario: 'Servicios Costa Azul Demo', banco: 'Pacífico', tipo_cuenta: 'Corriente', numero_cuenta: '3344556677', valor: '310.20', referencia: 'SERVICIO DE PRUEBA' },
+        { cedula_ruc: '1790000000005', beneficiario: 'Estructuras El Roble Muestra', banco: 'Internacional', tipo_cuenta: 'Ahorros', numero_cuenta: '7788990011', valor: '5999,99', referencia: 'ANTICIPO DEMO' },
+        { cedula_ruc: '1790000000006', beneficiario: 'Pinturas Sierra Clara Ficticio', banco: 'Bolivariano', tipo_cuenta: 'Corriente', numero_cuenta: '1122334455', valor: '76.08', referencia: 'FACTURA DE EJEMPLO' }
+      ];
+
+      const $ = (selector) => document.querySelector(selector);
+      const bankRows = $('#bankRows');
+      const results = $('#results');
+      let sourceRows = [];
+      let generated = [];
+      let toastTimer;
+
+      function normalizeText(value) {
+        return String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/gi, match => match === 'Ñ' ? 'N' : 'n');
+      }
+
+      function normalizeHeader(value) {
+        return normalizeText(value).toLowerCase().replace(/[\s-]+/g, '_');
+      }
+
+      function cleanFixed(value, length, padChar = ' ', align = 'right') {
+        const text = String(value ?? '').replace(/[\r\n\t]/g, ' ').slice(0, length);
+        return align === 'left' ? text.padStart(length, padChar) : text.padEnd(length, padChar);
+      }
+
+      function parseMoney(value) {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+        let text = String(value ?? '').trim().replace(/\s/g, '');
+        if (!text) return NaN;
+        const lastComma = text.lastIndexOf(',');
+        const lastDot = text.lastIndexOf('.');
+        if (lastComma > -1 && lastDot > -1) {
+          text = lastComma > lastDot ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '');
+        } else if (lastComma > -1) {
+          const decimals = text.length - lastComma - 1;
+          text = decimals === 1 || decimals === 2 ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '');
+        } else if (lastDot > -1) {
+          const decimals = text.length - lastDot - 1;
+          if (decimals !== 1 && decimals !== 2) text = text.replace(/\./g, '');
+          else text = text.replace(/,/g, '');
+        }
+        return /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : NaN;
+      }
+
+      function addBankRow(name = '', code = '') {
+        const row = document.createElement('div');
+        row.className = 'bank-row';
+        row.innerHTML = `
+          <input class="field bank-name" type="text" value="${escapeHtml(name)}" aria-label="Nombre del banco" placeholder="Banco">
+          <input class="field bank-code" type="text" value="${escapeHtml(code)}" aria-label="Código del banco" placeholder="0000" maxlength="4">
+          <button class="remove-bank" type="button" aria-label="Eliminar banco">×</button>`;
+        row.querySelector('.remove-bank').addEventListener('click', () => { row.remove(); refresh(); });
+        row.querySelectorAll('input').forEach(input => input.addEventListener('input', refresh));
+        bankRows.appendChild(row);
+      }
+
+      function getBanks() {
+        const map = new Map();
+        document.querySelectorAll('.bank-row').forEach(row => {
+          const name = row.querySelector('.bank-name').value.trim();
+          const code = row.querySelector('.bank-code').value.trim();
+          if (name) map.set(normalizeText(name).toLowerCase(), code);
+        });
+        return map;
+      }
+
+      function validate(rows) {
+        const errors = [];
+        const banks = getBanks();
+        rows.forEach((row, index) => {
+          const rowNumber = index + 2;
+          const empty = REQUIRED.filter(field => String(row[field] ?? '').trim() === '');
+          if (empty.length) errors.push(`Fila ${rowNumber}: campo${empty.length > 1 ? 's' : ''} vacío${empty.length > 1 ? 's' : ''}: ${empty.join(', ')}.`);
+          const bankName = normalizeText(row.banco).toLowerCase();
+          if (row.banco && !banks.has(bankName)) errors.push(`Fila ${rowNumber}: el banco “${row.banco}” no está en la tabla de equivalencias.`);
+          else if (row.banco && !/^.{4}$/.test(banks.get(bankName) || '')) errors.push(`Fila ${rowNumber}: el código de “${row.banco}” debe tener 4 caracteres.`);
+          if (row.valor !== '' && !Number.isFinite(parseMoney(row.valor))) errors.push(`Fila ${rowNumber}: el valor “${row.valor}” no es un número válido.`);
+          const type = normalizeText(row.tipo_cuenta).toLowerCase();
+          if (row.tipo_cuenta && type !== 'ahorros' && type !== 'corriente') errors.push(`Fila ${rowNumber}: tipo_cuenta debe ser Ahorros o Corriente.`);
+        });
+        return errors;
+      }
+
+      function makeRecord(row) {
+        const banks = getBanks();
+        const id = cleanFixed(String(row.cedula_ruc).replace(/\D/g, ''), 13, '0', 'left');
+        const beneficiary = cleanFixed(normalizeText(row.beneficiario).toUpperCase(), 40);
+        const bank = cleanFixed(banks.get(normalizeText(row.banco).toLowerCase()), 4);
+        const accountType = normalizeText(row.tipo_cuenta).toLowerCase() === 'ahorros' ? 'AHO' : 'CTE';
+        const account = cleanFixed(String(row.numero_cuenta).replace(/\D/g, ''), 20, '0', 'left');
+        const cents = Math.round(parseMoney(row.valor) * 100);
+        const amount = cleanFixed(String(cents), 12, '0', 'left');
+        const reference = cleanFixed(row.referencia, 30);
+        return id + beneficiary + bank + accountType + account + amount + reference;
+      }
+
+      function refresh() {
+        if (!sourceRows.length) return;
+        const errors = validate(sourceRows);
+        generated = errors.length ? [] : sourceRows.map((row, i) => ({ name: `PAGO_${String(i + 1).padStart(4, '0')}.txt`, text: makeRecord(row) }));
+        renderValidation(errors);
+        renderPreview();
+        renderFiles();
+        results.classList.add('visible');
+      }
+
+      function renderValidation(errors) {
+        const card = $('#validationCard');
+        const list = $('#errorList');
+        list.innerHTML = '';
+        if (errors.length) {
+          card.className = 'card validation error';
+          $('#validationMark').textContent = '!';
+          $('#validationTitle').textContent = `${errors.length} ${errors.length === 1 ? 'problema encontrado' : 'problemas encontrados'}`;
+          $('#validationText').textContent = 'Corrige los datos de origen o la tabla de equivalencias. Las descargas están bloqueadas.';
+          errors.forEach(error => { const li = document.createElement('li'); li.textContent = error; list.appendChild(li); });
+        } else {
+          card.className = 'card validation ok';
+          $('#validationMark').textContent = '✓';
+          $('#validationTitle').textContent = 'Datos listos para generar';
+          $('#validationText').textContent = `${sourceRows.length} ${sourceRows.length === 1 ? 'fila validada' : 'filas validadas'} · cada registro tiene exactamente 122 caracteres.`;
+        }
+      }
+
+      function buildRuler() {
+        let tens = '';
+        let units = '';
+        for (let i = 1; i <= 122; i++) {
+          tens += i % 10 === 0 ? String(Math.floor(i / 10) % 10) : ' ';
+          units += String(i % 10);
+        }
+        return `   ${tens}\n   ${units}`;
+      }
+
+      function renderPreview() {
+        $('#ruler').textContent = buildRuler();
+        const preview = $('#previewRecords');
+        preview.innerHTML = '';
+        if (!generated.length) {
+          const line = document.createElement('span');
+          line.className = 'record';
+          line.textContent = 'La vista previa aparecerá cuando no existan errores.';
+          preview.appendChild(line);
+        } else {
+          generated.slice(0, 3).forEach(file => {
+            const line = document.createElement('span');
+            line.className = 'record';
+            line.textContent = file.text;
+            preview.appendChild(line);
+          });
+        }
+        $('#copyPreview').disabled = !generated.length;
+        $('#downloadAll').disabled = !generated.length;
+      }
+
+      function renderFiles() {
+        const list = $('#filesList');
+        list.innerHTML = '';
+        $('#filesCount').textContent = generated.length ? `${generated.length} TXT` : 'Bloqueado';
+        if (!generated.length) {
+          const empty = document.createElement('p');
+          empty.className = 'bank-note';
+          empty.textContent = 'Los archivos se mostrarán aquí cuando todas las filas sean válidas.';
+          list.appendChild(empty);
+          return;
+        }
+        generated.forEach(file => {
+          const row = document.createElement('div');
+          row.className = 'file-row';
+          row.innerHTML = `<div class="file-icon">TXT</div><div><div class="file-name">${file.name}</div><div class="file-meta">122 caracteres · 1 registro</div></div><button class="btn btn-download" type="button">Descargar</button>`;
+          row.querySelector('button').addEventListener('click', () => downloadBlob(file.name, new Blob([file.text], { type: 'text/plain;charset=utf-8' })));
+          list.appendChild(row);
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
+      }
+
+      function mapRows(rawRows) {
+        return rawRows.map(raw => {
+          const normalized = {};
+          Object.entries(raw).forEach(([key, value]) => { normalized[normalizeHeader(key)] = value; });
+          return Object.fromEntries(REQUIRED.map(field => [field, normalized[field] ?? '']));
+        }).filter(row => Object.values(row).some(value => String(value).trim() !== ''));
+      }
+
+      function parseCsv(text) {
+        const firstLine = text.split(/\r?\n/, 1)[0] || '';
+        let commas = 0, semicolons = 0, headerQuoted = false;
+        for (let i = 0; i < firstLine.length; i++) {
+          if (firstLine[i] === '"') headerQuoted = !headerQuoted;
+          else if (!headerQuoted && firstLine[i] === ',') commas++;
+          else if (!headerQuoted && firstLine[i] === ';') semicolons++;
+        }
+        const delimiter = semicolons > commas ? ';' : ',';
+        const rows = [];
+        let row = [], value = '', quoted = false;
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          if (quoted) {
+            if (char === '"' && text[i + 1] === '"') { value += '"'; i++; }
+            else if (char === '"') quoted = false;
+            else value += char;
+          } else if (char === '"') quoted = true;
+          else if (char === delimiter) { row.push(value); value = ''; }
+          else if (char === '\n') { row.push(value.replace(/\r$/, '')); rows.push(row); row = []; value = ''; }
+          else value += char;
+        }
+        if (value.length || row.length) { row.push(value.replace(/\r$/, '')); rows.push(row); }
+        if (!rows.length) return [];
+        const headers = rows.shift().map(normalizeHeader);
+        return rows.map(values => Object.fromEntries(headers.map((header, i) => [header, values[i] ?? ''])));
+      }
+
+      async function loadFile(file) {
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!['xlsx', 'xls', 'csv'].includes(extension)) { showToast('Usa un archivo .xlsx o .csv.'); return; }
+        try {
+          let rawRows;
+          if (extension === 'csv') rawRows = parseCsv(await file.text());
+          else {
+            if (typeof XLSX === 'undefined') throw new Error('No se pudo cargar SheetJS. Revisa tu conexión a internet.');
+            const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', raw: false });
+            rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '', raw: false });
+          }
+          sourceRows = mapRows(rawRows);
+          if (!sourceRows.length) throw new Error('El archivo no contiene filas de datos.');
+          $('#fileStatus').textContent = `${file.name} · ${sourceRows.length} filas`;
+          refresh();
+          results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) { showToast(error.message || 'No se pudo leer el archivo.'); }
+      }
+
+      function downloadBlob(name, blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url; link.download = name;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function crc32(bytes) {
+        let crc = -1;
+        for (const byte of bytes) {
+          crc ^= byte;
+          for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+        }
+        return (crc ^ -1) >>> 0;
+      }
+
+      function makeZip(files) {
+        const encoder = new TextEncoder();
+        const parts = [], central = [];
+        let offset = 0;
+        const u16 = value => [value & 255, value >>> 8 & 255];
+        const u32 = value => [value & 255, value >>> 8 & 255, value >>> 16 & 255, value >>> 24 & 255];
+        files.forEach(file => {
+          const name = encoder.encode(file.name);
+          const data = encoder.encode(file.text);
+          const crc = crc32(data);
+          const local = new Uint8Array([80,75,3,4,20,0,0,8,0,0,0,0,0,0,...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),0,0,...name]);
+          parts.push(local, data);
+          const entry = new Uint8Array([80,75,1,2,20,0,20,0,0,8,0,0,0,0,0,0,...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),0,0,0,0,0,0,0,0,0,0,0,0,...u32(offset),...name]);
+          central.push(entry);
+          offset += local.length + data.length;
+        });
+        const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+        const end = new Uint8Array([80,75,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(centralSize),...u32(offset),0,0]);
+        return new Blob([...parts, ...central, end], { type: 'application/zip' });
+      }
+
+      function showToast(message) {
+        const toast = $('#toast');
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+      }
+
+      defaultBanks.forEach(([name, code]) => addBankRow(name, code));
+      $('#ruler').textContent = buildRuler();
+      $('#addBank').addEventListener('click', () => addBankRow());
+      $('#selectFile').addEventListener('click', () => $('#fileInput').click());
+      $('#fileInput').addEventListener('change', event => { if (event.target.files[0]) loadFile(event.target.files[0]); event.target.value = ''; });
+      $('#loadExample').addEventListener('click', () => {
+        sourceRows = exampleRows.map(row => ({ ...row }));
+        $('#fileStatus').textContent = 'Ejemplo ficticio · 6 filas';
+        refresh();
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      $('#copyPreview').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(generated.slice(0, 3).map(file => file.text).join('\n')); showToast('Vista previa copiada.'); }
+        catch { showToast('No se pudo copiar automáticamente.'); }
+      });
+      $('#downloadAll').addEventListener('click', () => { if (generated.length) downloadBlob('PAGOS_ERP.zip', makeZip(generated)); });
+
+      const dropzone = $('#dropzone');
+      ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.add('dragging'); }));
+      ['dragleave', 'drop'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.remove('dragging'); }));
+      dropzone.addEventListener('drop', event => { if (event.dataTransfer.files[0]) loadFile(event.dataTransfer.files[0]); });
+    })();
+  </script>
+</body>
+</html>
